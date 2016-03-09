@@ -109,4 +109,17 @@ namespace ZV.WebApi
         public BodyAttribute() { }
     }
     #endregion
+
+    #region Etc
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface)]
+    public class HeaderAttribute : Attribute {
+        public string Key { get; set; }
+        public string[] Values { get; set; }
+        public HeaderAttribute(string key, params string[] values) {
+
+            this.Key = key;
+            this.Values = values;
+        }
+    }
+    #endregion
 }

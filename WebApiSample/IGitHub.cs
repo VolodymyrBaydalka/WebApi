@@ -8,6 +8,7 @@ using ZV.WebApi;
 
 namespace WebApiSample
 {
+    [Header("User-Agent", "WebApi")]
     public interface IGitHub
     {
         [Get("rate_limit")]

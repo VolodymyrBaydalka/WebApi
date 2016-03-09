@@ -12,11 +12,7 @@ namespace WebApiSample
     {
         static void Main(string[] args)
         {
-            var client = WebApi.Client<IGitHub>("https://api.github.com", (uri) => {
-                var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Add("User-Agent", "WebApi"); // GitHub requires User-Agent
-                return httpClient;
-            });
+            var client = WebApi.Client<IGitHub>("https://api.github.com");
             var result = client.RateLimit();
 
             Console.WriteLine(result);

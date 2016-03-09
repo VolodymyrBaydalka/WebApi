@@ -15,7 +15,7 @@ namespace ZV.WebApi
 {
     internal class WebApiClient : RealProxy
     {
-        private readonly static Regex _curlyBrackets = new Regex(@"\{\{(.+?)\}\}");
+        private readonly static Regex _curlyBrackets = new Regex(@"\{(.+?)\}");
 
         public Uri BaseAddress { get; set; }
         public Func<Uri, HttpClient> HttpClientFactory { get; set; }
@@ -50,7 +50,10 @@ namespace ZV.WebApi
         public object Send(MethodInfo methodInfo, object[] parameterValues)
         {
             var webApi = methodInfo.DeclaringType.GetCustomAttribute<WebApiAttribute>();
+            var apiHeaders = methodInfo.DeclaringType.GetCustomAttributes<HeaderAttribute>();
+
             var webMethod = methodInfo.GetCustomAttribute<MethodAttribute>();
+            var methodHeaders = methodInfo.GetCustomAttributes<HeaderAttribute>();
 
             var parameters = methodInfo.GetParameters();
             var pathParameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
@@ -101,6 +104,9 @@ namespace ZV.WebApi
                 var mediaType = webApi == null ? MediaType.Json : webApi.MediaType;
                 var uriTemplate = webMethod == null ? null : webMethod.UriTemplate;
                 var requestUri = BuildRequestUri(uriTemplate, methodInfo.Name, pathParameters, queryParameters);
+
+                SetHeaders(httpClient, apiHeaders);
+                SetHeaders(httpClient, methodHeaders);
 
                 Task<HttpResponseMessage> responseTask = null;
 
@@ -221,7 +227,7 @@ namespace ZV.WebApi
             if (response.IsSuccessStatusCode)
                 return response.Content.ReadAsAsync(returnType).Result;
 
-            return new Exception(response.ReasonPhrase);
+            throw new WebApiStatusException(response.StatusCode, response.ReasonPhrase);
         }
         /// <summary>
         /// 
@@ -246,6 +252,17 @@ namespace ZV.WebApi
         private static string CombineUri(string baseUri, string path)
         {
             return baseUri.TrimEnd('/') + '/' + path.TrimStart('/');
+        }
+
+        private static void SetHeaders(HttpClient client, IEnumerable<HeaderAttribute> headers)
+        {
+            if (headers == null)
+                return;
+
+            foreach (var header in headers)
+            {
+                client.DefaultRequestHeaders.Add(header.Key, header.Values);
+            }
         }
     }
 }
