@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace ZV.WebApi
 {
+    [Serializable]
     public class WebApiException : Exception
     {
         public WebApiException(string message) : base(message)
@@ -14,6 +15,7 @@ namespace ZV.WebApi
         }
     }
 
+    [Serializable]
     public class WebApiStatusException : Exception
     {
         public HttpStatusCode StatusCode { get; set; }

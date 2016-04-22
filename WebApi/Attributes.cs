@@ -10,7 +10,13 @@ namespace ZV.WebApi
     [AttributeUsage(AttributeTargets.Interface)]
     public class WebApiAttribute : Attribute
     {
+        /// <summary>
+        /// Relative url to API
+        /// </summary>
         public string Uri { get; set; }
+        /// <summary>
+        /// API default media type 
+        /// </summary>
         public MediaType MediaType { get; set; }
     }
     #endregion
@@ -35,6 +41,9 @@ namespace ZV.WebApi
         }
     }
 
+    /// <summary>
+    /// Indicates that method will send PUT method
+    /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     public class GetAttribute : MethodAttribute
     {
@@ -42,12 +51,19 @@ namespace ZV.WebApi
         {
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="uriTemplate">Uri template. Parts surrounded by { and } will be replace with corresponding parameters.</param>
         public GetAttribute(string uriTemplate)
         {
             this.UriTemplate = uriTemplate;
         }
     }
 
+    /// <summary>
+    /// Indicates that method will send PUT method
+    /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     public class PutAttribute : MethodAttribute
     {
@@ -61,6 +77,9 @@ namespace ZV.WebApi
         }
     }
 
+    /// <summary>
+    /// Indicates that method will send DELETE method
+    /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     public class DeleteAttribute : MethodAttribute
     {
@@ -82,6 +101,9 @@ namespace ZV.WebApi
         public string Alias { get; set; }
     }
 
+    /// <summary>
+    /// Indicates that parameter will be use as argument of path template
+    /// </summary>
     [AttributeUsage(AttributeTargets.Parameter)]
     public class PathAttribute : ParameterAttribute
     {
@@ -89,6 +111,9 @@ namespace ZV.WebApi
         public PathAttribute(string alias) { this.Alias = alias; }
     }
 
+    /// <summary>
+    /// Indicates that parameter will be use as part of query
+    /// </summary>
     [AttributeUsage(AttributeTargets.Parameter)]
     public class QueryAttribute : ParameterAttribute
     {
@@ -103,6 +128,9 @@ namespace ZV.WebApi
         public FieldAttribute(string alias) { this.Alias = alias; }
     }
 
+    /// <summary>
+    /// Indicates that parameter will be use as body of post/put request 
+    /// </summary>
     [AttributeUsage(AttributeTargets.Parameter)]
     public class BodyAttribute : ParameterAttribute
     {
@@ -111,6 +139,9 @@ namespace ZV.WebApi
     #endregion
 
     #region Etc
+    /// <summary>
+    /// Sets headers to api/method
+    /// </summary>
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface)]
     public class HeaderAttribute : Attribute {
         public string Key { get; set; }
