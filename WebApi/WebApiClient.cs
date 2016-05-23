@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,41 +14,60 @@ using System.Threading.Tasks;
 
 namespace ZV.WebApi
 {
-    internal class WebApiClient : RealProxy
+    public class WebApiClient
     {
         private readonly static Regex _curlyBrackets = new Regex(@"\{(.+?)\}");
 
         public Uri BaseAddress { get; set; }
-        public Func<Uri, HttpClient> HttpClientFactory { get; set; }
 
-        public WebApiClient(Type type)
-            : base(type)
+        public JsonSerializerSettings JsonSerializerSettings { get; set; }
+
+        public Func<HttpClient> CreateHttpClient { get; set; }
+
+        public WebApiClient()
         {
         }
 
-        public override IMessage Invoke(IMessage msg)
+        public WebApiClient(string baseAddress)
         {
-            IMethodCallMessage methodCall = (IMethodCallMessage)msg;
-
-            try
-            {
-                var response = Send((MethodInfo)methodCall.MethodBase, methodCall.Args);
-
-                return new ReturnMessage(response, null, 0, methodCall.LogicalCallContext, methodCall);
-            }
-            catch (Exception e)
-            {
-                return new ReturnMessage(e, methodCall);
-            }
+            this.BaseAddress = new Uri(baseAddress);
         }
 
-        public static HttpClient DefaultFactory(Uri baseAddress)
+        protected virtual HttpClient OnCreateHttpClient()
         {
-            return new HttpClient() {
-            };
+            return CreateHttpClient == null ? new HttpClient() : CreateHttpClient();
         }
 
-        public object Send(MethodInfo methodInfo, object[] parameterValues)
+        protected HttpContent SerializeContent(MediaType mediaType, Type bodyType, object body, MediaTypeFormatterCollection formatters)
+        {
+            return new ObjectContent(bodyType, body, formatters.FindType(mediaType));
+        }
+
+        public T Build<T>()
+        {
+            var type = typeof(T);
+
+            if (!type.IsInterface)
+                throw new ArgumentException("Only interfaces are supported");
+
+            return (T)new WebClientProxy(type, this).GetTransparentProxy();
+        }
+
+        protected MediaTypeFormatterCollection CreateMediaTypeFormatterCollection()
+        {
+            var jsonMediaTypeFormatter = new JsonMediaTypeFormatter();
+
+            if (this.JsonSerializerSettings != null)
+                jsonMediaTypeFormatter.SerializerSettings = this.JsonSerializerSettings;
+
+            return new MediaTypeFormatterCollection(new MediaTypeFormatter[] {
+                new XmlMediaTypeFormatter(),
+                new FormUrlEncodedMediaTypeFormatter(),
+                jsonMediaTypeFormatter
+            });
+        }
+
+        internal object Send(MethodInfo methodInfo, object[] parameterValues)
         {
             var webApi = methodInfo.DeclaringType.GetCustomAttribute<WebApiAttribute>();
             var apiHeaders = methodInfo.DeclaringType.GetCustomAttributes<HeaderAttribute>();
@@ -89,7 +109,7 @@ namespace ZV.WebApi
                     bodyParam = value;
                     bodyType = value == null ? param.ParameterType : value.GetType();
                 }
-                else if(attr is FieldAttribute)
+                else if (attr is FieldAttribute)
                 {
                     if (bodyParam != fieldParameters)
                         throw new NotSupportedException("Only one body parameter is supported.");
@@ -99,11 +119,12 @@ namespace ZV.WebApi
                 }
             }
 
-            using (var httpClient = this.HttpClientFactory(this.BaseAddress))
+            using (var httpClient = OnCreateHttpClient())
             {
                 var mediaType = webApi == null ? MediaType.Json : webApi.MediaType;
                 var uriTemplate = webMethod == null ? null : webMethod.UriTemplate;
                 var requestUri = BuildRequestUri(uriTemplate, methodInfo.Name, pathParameters, queryParameters);
+                var formatters = CreateMediaTypeFormatterCollection();
 
                 SetHeaders(httpClient, apiHeaders);
                 SetHeaders(httpClient, methodHeaders);
@@ -114,50 +135,23 @@ namespace ZV.WebApi
                 {
                     responseTask = httpClient.GetAsync(requestUri);
                 }
-                else if(webMethod is PostAttribute)
+                else if (webMethod is PostAttribute)
                 {
-                    responseTask = httpClient.PostAsync(requestUri, PrepareHttpContent(mediaType, bodyType, bodyParam));
+                    responseTask = httpClient.PostAsync(requestUri, SerializeContent(mediaType, bodyType, bodyParam, formatters));
                 }
                 else if (webMethod is PutAttribute)
                 {
-                    responseTask = httpClient.PutAsync(requestUri, PrepareHttpContent(mediaType, bodyType, bodyParam));
+                    responseTask = httpClient.PutAsync(requestUri, SerializeContent(mediaType, bodyType, bodyParam, formatters));
                 }
                 else if (webMethod is DeleteAttribute)
                 {
                     responseTask = httpClient.DeleteAsync(requestUri);
                 }
 
-                return HandleResponseTask(responseTask, methodInfo.ReturnType);
+                return HandleResponseTask(responseTask, methodInfo.ReturnType, formatters);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="mediaType"></param>
-        /// <param name="bodyParams"></param>
-        /// <returns></returns>
-        private HttpContent PrepareHttpContent(MediaType mediaType, Type bodyType, object body)
-        {
-            MediaTypeFormatter mediaTypeFormatter = null;
-
-            switch (mediaType)
-            {
-                case MediaType.Json:
-                    mediaTypeFormatter = new JsonMediaTypeFormatter();
-                    break;
-
-                case MediaType.Xml:
-                    mediaTypeFormatter = new XmlMediaTypeFormatter();
-                    break;
-
-                case MediaType.FormUrlEncoded:
-                    mediaTypeFormatter = new FormUrlEncodedMediaTypeFormatter();
-                    break;
-            }
-
-            return new ObjectContent(bodyType, body, mediaTypeFormatter);
-        }
         /// <summary>
         /// 
         /// </summary>
@@ -168,16 +162,17 @@ namespace ZV.WebApi
         /// <returns></returns>
         private string BuildRequestUri(string uriTemplate, string methodName, Dictionary<string, object> pathParams, Dictionary<string, object> queryParams)
         {
-            var uriBuilder = new UriBuilder(this.BaseAddress);
+            var uriBuilder = new UriBuilder(BaseAddress);
 
             if (!string.IsNullOrEmpty(uriTemplate))
             {
-                methodName = _curlyBrackets.Replace(uriTemplate, x => {
+                methodName = _curlyBrackets.Replace(uriTemplate, x =>
+                {
                     return Convert.ToString(pathParams[x.Groups[1].Value]);
                 });
             }
 
-            uriBuilder.Path = CombineUri(uriBuilder.Path, methodName);
+            uriBuilder.Path = Utils.CombineUri(uriBuilder.Path, methodName);
 
             if (queryParams.Count > 0)
             {
@@ -189,13 +184,13 @@ namespace ZV.WebApi
 
                     if (arrayValue == null)
                     {
-                        AppendQuery(queryBuider, item.Key, Convert.ToString(item.Value));
+                        Utils.AppendQuery(queryBuider, item.Key, Convert.ToString(item.Value));
                     }
                     else
                     {
                         foreach (var value in arrayValue)
                         {
-                            AppendQuery(queryBuider, item.Key, Convert.ToString(value));
+                            Utils.AppendQuery(queryBuider, item.Key, Convert.ToString(value));
                         }
                     }
                 }
@@ -211,7 +206,7 @@ namespace ZV.WebApi
         /// <param name="responseTask"></param>
         /// <param name="returnType"></param>
         /// <returns></returns>
-        private object HandleResponseTask(Task<HttpResponseMessage> responseTask, Type returnType)
+        private object HandleResponseTask(Task<HttpResponseMessage> responseTask, Type returnType, MediaTypeFormatterCollection formatters)
         {
             if (returnType == typeof(Task<HttpResponseMessage>))
             {
@@ -225,33 +220,9 @@ namespace ZV.WebApi
             var response = responseTask.Result;
 
             if (response.IsSuccessStatusCode)
-                return response.Content.ReadAsAsync(returnType).Result;
+                return response.Content.ReadAsAsync(returnType, formatters).Result;
 
             throw new WebApiStatusException(response.StatusCode, response.ReasonPhrase);
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="query"></param>
-        /// <param name="param"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        private static StringBuilder AppendQuery(StringBuilder query, string param, string value)
-        {
-            if (query.Length != 0)
-                query.Append("&");
-
-            return query.Append(param).Append("=").Append(Uri.EscapeDataString(value));
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="baseUri"></param>
-        /// <param name="path"></param>
-        /// <returns></returns>
-        private static string CombineUri(string baseUri, string path)
-        {
-            return baseUri.TrimEnd('/') + '/' + path.TrimStart('/');
         }
 
         private static void SetHeaders(HttpClient client, IEnumerable<HeaderAttribute> headers)

@@ -142,7 +142,7 @@ namespace ZV.WebApi
     /// <summary>
     /// Sets headers to api/method
     /// </summary>
-    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface)]
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface, AllowMultiple = true)]
     public class HeaderAttribute : Attribute {
         public string Key { get; set; }
         public string[] Values { get; set; }

@@ -42,7 +42,7 @@ How To Use
   
   Step 4) Use
   ```
-    var client = WebApi.Client<IGitHub>("https://api.github.com");
+    var client = new WebApiClient(https://api.github.com).Build<IGitHub>();
     var result = client.RateLimit();
   ```
 

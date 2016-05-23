@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>WebApi</id>
+    <authors>Volodymyr Baydalka</authors>
+    <owners>Volodymyr Baydalka</owners>
+    <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0</licenseUrl>
+    <projectUrl>https://github.com/zVolodymyr/WebApi</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Generic Web Api client based on RealProxy</description>
+    <releaseNotes>Initial.</releaseNotes>
+    <copyright>Copyright 2016</copyright>
+    <tags>WebApi Client</tags>
+    <dependencies>
+    </dependencies>
+  </metadata>
+</package>
