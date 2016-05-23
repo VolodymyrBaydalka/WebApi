@@ -12,7 +12,7 @@ namespace WebApiSample
     {
         static void Main(string[] args)
         {
-            var client = WebApi.Client<IGitHub>("https://api.github.com");
+            var client = new WebApiClient("https://api.github.com").Build<IGitHub>();
             var result = client.RateLimit();
             var json = client.RateLimitJson();
 
