@@ -1,4 +1,4 @@
-[![zvsharp MyGet Build Status](https://www.myget.org/BuildSource/Badge/zvsharp?identifier=e3950b12-4d7f-4043-b8f6-57903cd91713)](https://www.myget.org/)
+[![zvsharp MyGet Build Status](https://www.myget.org/BuildSource/Badge/zvsharp?identifier=e3950b12-4d7f-4043-b8f6-57903cd91713)](https://www.myget.org/feed/zvsharp/package/nuget/WebApi)
 WebApi
 ========
 Yet another implementation of Retrofit for .NET based on RealProxy class
