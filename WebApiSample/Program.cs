@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.Http;
-using ZV.WebApi;
+using DuncanApps.WebApi;
 
 namespace WebApiSample
 {

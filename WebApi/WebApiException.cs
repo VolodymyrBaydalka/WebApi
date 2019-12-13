@@ -5,7 +5,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ZV.WebApi
+namespace DuncanApps.WebApi
 {
     [Serializable]
     public class WebApiException : Exception

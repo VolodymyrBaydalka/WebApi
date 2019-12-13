@@ -7,7 +7,7 @@ using System.Runtime.Remoting.Proxies;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ZV.WebApi
+namespace DuncanApps.WebApi
 {
     sealed class WebClientProxy : RealProxy
     {

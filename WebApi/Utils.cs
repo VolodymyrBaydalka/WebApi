@@ -5,7 +5,7 @@ using System.Net.Http.Formatting;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ZV.WebApi
+namespace DuncanApps.WebApi
 {
     static class Utils
     {
