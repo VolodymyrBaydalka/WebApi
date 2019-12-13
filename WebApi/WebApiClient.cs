@@ -14,6 +14,7 @@ namespace DuncanApps.WebApi
     public class WebApiClient
     {
         private readonly static Regex _curlyBrackets = new Regex(@"\{(.+?)\}");
+        private readonly static MethodInfo _sendAndReadMethod;
 
         public Uri BaseAddress { get; set; }
 
@@ -21,13 +22,14 @@ namespace DuncanApps.WebApi
 
         public Func<HttpClient> CreateHttpClient { get; set; }
 
-        public WebApiClient()
+        static WebApiClient()
         {
+            _sendAndReadMethod = typeof(WebApiClient).GetMethod(nameof(SendAndReadContentAsync), BindingFlags.NonPublic | BindingFlags.Static);
         }
 
-        public WebApiClient(string baseAddress)
+        public WebApiClient(string baseAddress = null)
         {
-            this.BaseAddress = new Uri(baseAddress);
+            this.BaseAddress = baseAddress == null ? null : new Uri(baseAddress, UriKind.RelativeOrAbsolute);
         }
 
         protected virtual HttpClient OnCreateHttpClient()
@@ -116,37 +118,40 @@ namespace DuncanApps.WebApi
                 }
             }
 
-            using (var httpClient = OnCreateHttpClient())
+
+            var mediaType = webApi == null ? MediaType.Json : webApi.MediaType;
+            var uriTemplate = webMethod?.UriTemplate;
+            var requestUri = BuildRequestUri(uriTemplate, methodInfo.Name, pathParameters, queryParameters);
+            var formatters = CreateMediaTypeFormatterCollection();
+
+            var request = new HttpRequestMessage
             {
-                var mediaType = webApi == null ? MediaType.Json : webApi.MediaType;
-                var uriTemplate = webMethod == null ? null : webMethod.UriTemplate;
-                var requestUri = BuildRequestUri(uriTemplate, methodInfo.Name, pathParameters, queryParameters);
-                var formatters = CreateMediaTypeFormatterCollection();
+                RequestUri = requestUri
+            };
 
-                SetHeaders(httpClient, apiHeaders);
-                SetHeaders(httpClient, methodHeaders);
+            SetHeaders(request, apiHeaders);
+            SetHeaders(request, methodHeaders);
 
-                Task<HttpResponseMessage> responseTask = null;
-
-                if (webMethod == null || webMethod is GetAttribute)
-                {
-                    responseTask = httpClient.GetAsync(requestUri);
-                }
-                else if (webMethod is PostAttribute)
-                {
-                    responseTask = httpClient.PostAsync(requestUri, SerializeContent(mediaType, bodyType, bodyParam, formatters));
-                }
-                else if (webMethod is PutAttribute)
-                {
-                    responseTask = httpClient.PutAsync(requestUri, SerializeContent(mediaType, bodyType, bodyParam, formatters));
-                }
-                else if (webMethod is DeleteAttribute)
-                {
-                    responseTask = httpClient.DeleteAsync(requestUri);
-                }
-
-                return HandleResponseTask(responseTask, methodInfo.ReturnType, formatters);
+            if (webMethod == null || webMethod is GetAttribute)
+            {
+                request.Method = HttpMethod.Get;
             }
+            else if (webMethod is PostAttribute)
+            {
+                request.Method = HttpMethod.Post;
+                request.Content = SerializeContent(mediaType, bodyType, bodyParam, formatters);
+            }
+            else if (webMethod is PutAttribute)
+            {
+                request.Method = HttpMethod.Put;
+                request.Content = SerializeContent(mediaType, bodyType, bodyParam, formatters);
+            }
+            else if (webMethod is DeleteAttribute)
+            {
+                request.Method = HttpMethod.Delete;
+            }
+
+            return SendInternal(request, methodInfo.ReturnType, formatters);
         }
 
         /// <summary>
@@ -157,7 +162,7 @@ namespace DuncanApps.WebApi
         /// <param name="pathParams"></param>
         /// <param name="queryParams"></param>
         /// <returns></returns>
-        private string BuildRequestUri(string uriTemplate, string methodName, Dictionary<string, object> pathParams, Dictionary<string, object> queryParams)
+        private Uri BuildRequestUri(string uriTemplate, string methodName, Dictionary<string, object> pathParams, Dictionary<string, object> queryParams)
         {
             var uriBuilder = new UriBuilder(BaseAddress);
 
@@ -177,9 +182,7 @@ namespace DuncanApps.WebApi
 
                 foreach (var item in queryParams)
                 {
-                    var arrayValue = item.Value as ICollection;
-
-                    if (arrayValue == null)
+                    if (!(item.Value is ICollection arrayValue))
                     {
                         Utils.AppendQuery(queryBuider, item.Key, Convert.ToString(item.Value));
                     }
@@ -195,7 +198,7 @@ namespace DuncanApps.WebApi
                 uriBuilder.Query = queryBuider.ToString();
             }
 
-            return uriBuilder.ToString();
+            return new Uri(uriBuilder.ToString(), UriKind.RelativeOrAbsolute);
         }
         /// <summary>
         /// 
@@ -203,33 +206,52 @@ namespace DuncanApps.WebApi
         /// <param name="responseTask"></param>
         /// <param name="returnType"></param>
         /// <returns></returns>
-        private object HandleResponseTask(Task<HttpResponseMessage> responseTask, Type returnType, MediaTypeFormatterCollection formatters)
+        private object SendInternal(HttpRequestMessage request, Type returnType, MediaTypeFormatterCollection formatters)
         {
-            if (returnType == typeof(Task<HttpResponseMessage>))
+            if (returnType.IsGenericOf(typeof(Task<>)))
             {
-                return responseTask;
-            }
-            else if (returnType == typeof(HttpResponseMessage))
-            {
-                return responseTask.Result;
+                var generic = _sendAndReadMethod.MakeGenericMethod(returnType.GetGenericArguments()[0]);
+                return generic.Invoke(null, new object[] { this, request, formatters });
             }
 
-            var response = responseTask.Result;
-
-            if (response.IsSuccessStatusCode)
-                return response.Content.ReadAsAsync(returnType, formatters).Result;
-
-            throw new WebApiStatusException(response.StatusCode, response.ReasonPhrase);
+            return SendAndReadContentAsync(request, returnType, formatters)
+                .ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
-        private static void SetHeaders(HttpClient client, IEnumerable<HeaderAttribute> headers)
+        private static async Task<T> SendAndReadContentAsync<T>(WebApiClient webApiClient, HttpRequestMessage request, MediaTypeFormatterCollection formatters)
+        {
+            using (var client = webApiClient.OnCreateHttpClient())
+            {
+                var response = await client.SendAsync(request).ConfigureAwait(false);
+
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadAsAsync<T>(formatters).ConfigureAwait(false);
+
+                throw new WebApiStatusException(response.StatusCode, response.ReasonPhrase);
+            }
+        }
+
+        private async Task<object> SendAndReadContentAsync(HttpRequestMessage request, Type returnType, MediaTypeFormatterCollection formatters)
+        {
+            using (var client = OnCreateHttpClient())
+            {
+                var response = await client.SendAsync(request).ConfigureAwait(false);
+
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadAsAsync(returnType, formatters).ConfigureAwait(false);
+
+                throw new WebApiStatusException(response.StatusCode, response.ReasonPhrase);
+            }
+        }
+
+        private static void SetHeaders(HttpRequestMessage request, IEnumerable<HeaderAttribute> headers)
         {
             if (headers == null)
                 return;
 
             foreach (var header in headers)
             {
-                client.DefaultRequestHeaders.Add(header.Key, header.Values);
+                request.Headers.Add(header.Key, header.Values);
             }
         }
     }

@@ -17,6 +17,9 @@ namespace WebApiSample
         [Get("rate_limit")]
         JObject RateLimitJson();
 
+        [Get("rate_limit")]
+        Task<RateLimits> RateLimitAsync();
+
     }
 
     public class RateLimits

@@ -14,9 +14,11 @@ namespace WebApiSample
         {
             var client = new WebApiClient("https://api.github.com").Build<IGitHub>();
             var result = client.RateLimit();
+            var taskResult = client.RateLimitAsync().Result;
             var json = client.RateLimitJson();
 
             Console.WriteLine(result);
+            Console.WriteLine(taskResult);
             Console.WriteLine(json);
 
             Console.ReadKey();
